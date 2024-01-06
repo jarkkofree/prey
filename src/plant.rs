@@ -155,9 +155,9 @@ fn spawn_plants(
 
             for (t, _) in plants.iter() {
     
-                let modifier = 1.0 / (plant_count as f32).powf(config.spawn_chance);
-                let chance = rng.gen_range(0.0..1.0);
-                if chance > modifier {
+                let threshold = 1.0 / (plant_count as f32).powf(config.spawn_chance);
+                let fail_chance = rng.gen_range(0.0..1.0);
+                if fail_chance > threshold {
                     continue;
                 }
     

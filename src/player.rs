@@ -54,23 +54,23 @@ fn look(
                 let delta_y = -ev.delta.y * LOOK_SENSITIVITY * time.delta_seconds();
 
                 // Calculate the potential new rotation
-                let potential_pitch_quat = Quat::from_rotation_x(delta_y);
-                let potential_new_rotation = t.rotation * potential_pitch_quat;
+                let pitch = Quat::from_rotation_x(delta_y);
+                let pitch_rotation = t.rotation * pitch;
 
                 // Calculate the camera's new up vector
-                let new_up = potential_new_rotation.mul_vec3(Vec3::Y);
+                let new_up = pitch_rotation.mul_vec3(Vec3::Y);
 
                 // Check the angle with global up
                 let angle_with_up = Vec3::Y.angle_between(new_up);
 
                 // Apply the rotation if within bounds
                 if angle_with_up < UP && angle_with_up > -UP {
-                    t.rotation = potential_new_rotation;
+                    t.rotation = pitch_rotation;
                 }
 
                 // Apply yaw rotation globally (left/right)
-                let yaw_quat = Quat::from_rotation_y(delta_x);
-                t.rotation = yaw_quat * t.rotation;
+                let yaw = Quat::from_rotation_y(delta_x);
+                t.rotation = yaw * t.rotation;
             }
         }
     }
