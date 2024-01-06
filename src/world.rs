@@ -28,10 +28,12 @@ fn setup_world(
     commands.spawn(PbrBundle {
         mesh: meshes.add(mesh),
         material: materials.add(material),
-        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        transform: Transform::IDENTITY,
         ..Default::default()
     });
 
+    let light_height = 8.0;
+    let light_offset = 4.0;
     commands.spawn(PointLightBundle {
         point_light: PointLight {
             intensity: 1500.0,
@@ -39,7 +41,7 @@ fn setup_world(
             range: 500.0,
             ..Default::default()
         },
-        transform: Transform::from_xyz(4.0, 8.0, 4.0),
+        transform: Transform::from_xyz(light_offset, light_height, light_offset),
         ..Default::default()
     });
 }
