@@ -32,9 +32,9 @@ impl Default for PlantConfig {
             plant_radius: 0.15,
             plant_color: Color::rgb(0.3, 0.7, 0.1),
             spawn_rate: 1.0,
-            spawn_chance: 0.8, // 1/count^spawn_chance
+            spawn_chance: 0.4, // 1/count^spawn_chance
             spawn_range: 15.0,
-            spawn_max: 200,
+            spawn_max: 10_000,
             spawn_area: 50.0,
         }
     }

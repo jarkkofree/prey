@@ -25,8 +25,11 @@ struct Config {
     torso_width: f32,
     spawn_area: f32,
     spawn_rate: isize,
+    spawn_cost: isize,
+    spawn_happiness: isize,
     speed: f32,
     search_radius: f32,
+    wander_range: f32,
 }
 
 impl Default for Config {
@@ -37,10 +40,13 @@ impl Default for Config {
             torso_length: 2.0,
             torso_height: 1.0,
             torso_width: 1.0,
-            spawn_area: 50.0,
-            spawn_rate: 10,
+            spawn_area: 40.0,
+            spawn_rate: 20,
+            spawn_cost: 17,
+            spawn_happiness: 10,
             speed: 1.0,
-            search_radius: 5.0,
+            search_radius: 8.0,
+            wander_range: 16.0,
         }
     }
 }
@@ -102,6 +108,14 @@ impl Deer {
         }
     }
 
+    fn spawn(t: &Transform, config: &Config) -> Self {
+        Deer {
+            x: t.translation.x + 1.0,
+            y: t.translation.z + 1.0,
+            height: config.height,
+        }
+    }
+
     fn transform(&self) -> Transform {
         const HALF: f32 = 0.5;
         Transform::from_xyz(self.x, self.height*HALF, self.y)
@@ -134,6 +148,44 @@ struct State {
     objective: Objective,
 }
 
+impl State {
+    fn starving(&self) -> bool {
+        self.happiness <= 0
+    }
+    fn happy(&self, config: &Config) -> bool {
+        self.happiness >= config.spawn_rate
+    }
+    fn wander(&mut self, me: &Transform, config: &Config) {
+        let pos = config.get_pos();
+        let mut dest = Vec3::new(pos.x, 0.0, pos.y);
+
+        if dest.distance(me.translation) > config.wander_range {
+            let mut direction = dest - me.translation;
+            direction.y = 0.0;
+            direction = direction.normalize();
+    
+            dest = me.translation + direction * config.wander_range;
+        }
+
+        self.objective = Objective::Wandering(dest);
+        self.happiness -= 2;
+    }
+    fn eat(&mut self) {
+        self.happiness += 1;
+        self.objective = Objective::Searching;
+    }
+    fn face(&self, me: &mut Transform, target: &Transform) -> Vec3 {
+        let mut direction = target.translation - me.translation;
+        direction.y = 0.0;
+        direction = direction.normalize();
+        let forward = me.forward();
+        if forward.dot(direction) < 0.99 {
+            me.rotate(Quat::from_rotation_arc(forward, direction));
+        }
+        direction
+    }
+}
+
 enum Objective {
     Searching,
     Hunting(Entity),
@@ -143,7 +195,7 @@ enum Objective {
 
 fn spawn(
     mut commands: Commands,
-    mut deers: Query<&mut State>,
+    mut deers: Query<(Entity, &Transform, &mut State)>,
     config: Res<Config>,
     asset_handles: Res<DeerAssetHandles>,
 ) {
@@ -154,14 +206,19 @@ fn spawn(
         new_deer.push(deer);
 
     } else {
-        for mut state in deers.iter_mut() {
-            if !(state.happiness >= config.spawn_rate) {
-                continue;
+        for (e, t, mut state) in deers.iter_mut() {
+            if state.happy(&config) {
+                let deer = Deer::spawn(&t, &config);
+                new_deer.push(deer);
+    
+                state.happiness -= config.spawn_cost; // TODO: enum?
             }
-            let deer = Deer::new(&config);
-            new_deer.push(deer);
 
-            state.happiness = 5; // TODO: enum?
+            if state.starving() {
+                if let Some(mut e) = commands.get_entity(e) {
+                    e.despawn();
+                }
+            }
         }
     }
     for d in new_deer.iter() {
@@ -173,7 +230,7 @@ fn spawn(
                 ..Default::default()
             },
             State {
-                happiness: 5,
+                happiness: config.spawn_happiness,
                 objective: Objective::Searching,
             },
         ));
@@ -185,19 +242,12 @@ fn spawn(
 
 fn deer_ai(
     mut commands: Commands,
-    mut q_deer: Query<(Entity, &mut State, &mut Transform, Without<PlantTag>)>,
+    mut q_deer: Query<(&mut State, &mut Transform, Without<PlantTag>)>,
     q_plant: Query<(Entity, &Transform, With<PlantTag>)>,
     config: Res<Config>,
     time: Res<Time>,
 ) {
-    for (e, mut deer_state, mut deer_transform, _) in q_deer.iter_mut() {
-        
-        if deer_state.happiness <= 0 {
-            if let Some(mut e) = commands.get_entity(e) {
-                e.despawn();
-            }
-        }
-
+    for (mut deer_state, mut deer_transform, _) in q_deer.iter_mut() {
         match deer_state.objective {
             Objective::Searching => {
                 // Find the closest plant within a certain radius
@@ -213,11 +263,7 @@ fn deer_ai(
                 if let Some((e, _, _)) = closest_plant {
                     deer_state.objective = Objective::Hunting(e);
                 } else {
-                    let pos = config.get_pos();
-                    let dest = Vec3::new(pos.x, 0.0, pos.y);
-                    deer_state.objective = Objective::Wandering(dest);
-                    deer_state.happiness -= 2;
-                    info!("wandering, happiness: {}", deer_state.happiness);
+                    deer_state.wander(&deer_transform, &config);
                 }
             },
             Objective::Wandering(dest) => {
@@ -228,47 +274,32 @@ fn deer_ai(
                 let forward = deer_transform.forward();
                 deer_transform.rotate(Quat::from_rotation_arc(forward, direction));
 
-                if deer_transform.translation.distance(dest) > 2.0 {
+                if deer_transform.translation.distance(dest) > 1.5 {
                     deer_transform.translation += direction * config.speed * 2.0 * time.delta_seconds();
                 } else {
                     deer_state.objective = Objective::Searching;
-                    info!("searching");
                 }
             }
             Objective::Hunting(target) => {
                 if let Some((e, t, _)) = q_plant.iter().find(|(e, _, _)| e == &target) {
                     // rotate toward if not facing
-                    let mut direction = t.translation - deer_transform.translation;
-                    direction.y = 0.0;
-                    direction = direction.normalize();
-                    let forward = deer_transform.forward();
-                    deer_transform.rotate(Quat::from_rotation_arc(forward, direction));
+                    let direction = deer_state.face(&mut deer_transform, &t);
 
-                    if deer_transform.translation.distance(t.translation) > 1.0 {
+                    if deer_transform.translation.distance(t.translation) > 1.5 {
                         deer_transform.translation += direction * config.speed * time.delta_seconds();
                     } else {
                         deer_state.objective = Objective::Eating(e);
-                        info!("eating");
                     }
                 } else {
-                    let pos = config.get_pos();
-                    let dest = Vec3::new(pos.x, 0.0, pos.y);
-                    deer_state.objective = Objective::Wandering(dest);
-                    deer_state.happiness -= 2;
-                    info!("wandering, happiness: {}", deer_state.happiness);
+                    deer_state.wander(&deer_transform, &config);
                 };
             },
             Objective::Eating(target) => {
                 if let Some(mut e) = commands.get_entity(target) {
                     e.despawn();
-                    deer_state.happiness += 1;
-                    info!("just ate, happiness: {}", deer_state.happiness);
-                    deer_state.objective = Objective::Searching;
+                    deer_state.eat();
                 } else {
-                    let pos = config.get_pos();
-                    let dest = Vec3::new(pos.x, 0.0, pos.y);
-                    deer_state.objective = Objective::Wandering(dest);
-                    deer_state.happiness -= 2;
+                    deer_state.wander(&deer_transform, &config);
                 }
 
             }
