@@ -16,7 +16,7 @@ fn setup_world(
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mesh = Mesh::from(shape::Plane {
-        size: 50.0,
+        size: 100.0,
         ..Default::default()
     });
 

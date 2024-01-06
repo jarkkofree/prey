@@ -31,11 +31,11 @@ impl Default for PlantConfig {
             plant_height: 1.0,
             plant_radius: 0.15,
             plant_color: Color::rgb(0.3, 0.7, 0.1),
-            spawn_rate: 0.25,
-            spawn_chance: 0.7, // 1/count^spawn_chance
-            spawn_range: 10.0,
-            spawn_max: 5000,
-            spawn_area: 25.0,
+            spawn_rate: 1.0,
+            spawn_chance: 0.8, // 1/count^spawn_chance
+            spawn_range: 15.0,
+            spawn_max: 200,
+            spawn_area: 50.0,
         }
     }
 }
@@ -93,7 +93,7 @@ impl Plant {
 }
 
 #[derive(Component)]
-struct PlantTag;
+pub struct PlantTag;
 
 #[derive(Resource)]
 struct PlantSpawn {
